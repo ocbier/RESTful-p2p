@@ -1,0 +1,274 @@
+/**
+ * IndexServiceController.java
+ * 
+ * Provides an interface to the data classes for the index service. This provides an abstraction
+ * for communication with the database. 
+ * 
+ * Provides functionality for creating new file sharing records, removing existing records,
+ * and retrieving existing records.
+ * 
+ * @author Oloff Biermann
+ * 
+ */
+
+package org.biermann.tme3.p2pindex.controllers;
+
+
+import org.biermann.tme3.p2pindex.data.*;
+import org.biermann.tme3.p2pindex.exception.FileAlreadySharedException;
+import org.biermann.tme3.p2pindex.exception.FileNotSharedException;
+
+import java.sql.*;
+
+public class IndexServiceController
+{
+	public final String MARIADB_CONN_STR = "jdbc:mariadb://localhost:3306/sharing_index";
+	public final String MARIADB_CONN_USER = "index_user";
+	private final String MARIADB_CONN_PW = "d44d614319262e21363be1c86d6f9fc2";
+	private final String JDBC_MARIADB_DRIVER = "org.mariadb.jdbc.Driver";
+	
+	private Connection dbConnection;
+		
+	public IndexServiceController()
+	{
+		try
+		{
+			Class.forName(JDBC_MARIADB_DRIVER);                  //Initialize class for MariaDB JDBC driver
+			dbConnection = DriverManager.getConnection(MARIADB_CONN_STR, 
+					MARIADB_CONN_USER, MARIADB_CONN_PW);
+		}
+		catch (SQLException ex)
+		{
+			System.err.println("Error connecting to database: "+ 
+					MARIADB_CONN_STR + "\n" + ex.getMessage());
+			
+			throw new RuntimeException ("Exception while connecting to the database.");     
+		}
+		catch (ClassNotFoundException classNotFound)
+		{
+			System.err.println("Unable to register the MariaDB JDBC driver: "+ 
+					JDBC_MARIADB_DRIVER + "\n" + classNotFound.getMessage());
+			
+			throw new RuntimeException ("Error. Unable to register the MariaDB JDBC driver.");     
+		}
+	
+	}
+	
+	
+	
+	/**Determines if the specified file is being shared by
+	 * any peer.
+	 * @param fileName String of file name to check
+	 * @return boolean true if file is being shared, false otherwise
+	 * @throw RuntimeException if database query fails.
+	 */
+	public boolean checkFileExists(String fileName)
+	{
+		try {
+			return PeerFile.fileExists(dbConnection, fileName);
+		} catch (SQLException ex)
+		{
+			throw new RuntimeException("Exception occurred while reading from database: " + ex.getMessage() + " \n " + ex.getSQLState() ); 
+		}
+	}
+	
+	
+	/**
+	 * Determine if the specified file is being shared by the host. Very similar to checkPeerSharing
+	 * with the notable difference that a FileNotSharedException is thrown if the file is not shared
+	 * by the host or the host does not exist.
+	 * 
+	 * @param fileName String with the file name to check
+	 * @param hostAddress String with host address to check
+	 * @return boolean true if the specified host is sharing the file
+	 * @throws FileNotSharedException if the file is not shared by the host or the host does not exist
+	 * @throws RuntimeException if the database operation fails
+	 */
+	public boolean affirmPeerSharing(String fileName, String hostAddress)
+	{
+		int sharingPeerGUID = 0;
+		try {
+			sharingPeerGUID = Peer.queryPeerGUID(dbConnection, hostAddress);
+			} catch (SQLException e) 
+		  {
+			  throw new RuntimeException("Error completing the database operation: " + e.getMessage() + " \n " + e.getSQLState());
+		  }
+		
+		if (sharingPeerGUID < 0)
+		{
+			throw new FileNotSharedException("The peer " + hostAddress + " does not exist. PeerGUID " +sharingPeerGUID );
+		}
+			
+		try 
+		{
+			if (!(FileShared.checkFileShared(dbConnection, sharingPeerGUID, fileName)))
+			{
+				throw new FileNotSharedException("The peer " + hostAddress + " is not sharing the file " + fileName + ".");
+			}
+		} catch (SQLException ex) 
+		   {
+			  throw new RuntimeException("Error completing the database operation: "+ ex.getMessage() + " \n " + ex.getSQLState());
+		   }
+		
+		return true;
+	}
+	
+	
+	/**
+	 * Determine if the specified file is being shared by the host. Returns boolean value
+	 * depending on outcome of query.
+	 * 
+	 * @param fileName String with the file name to check
+	 * @param hostAddress String with host address to check
+	 * @return boolean true if the specified host is sharing the file, false otherwise
+	 * @throws FileNotSharedException if the file is not shared by the host or the host does not exist
+	 * @throws RuntimeException if the database operation fails
+	 */	
+	public boolean checkPeerSharing(String fileName, String hostAddress)
+	{
+		int sharingPeerGUID = 0;
+		boolean outcome = false;
+		try {
+			sharingPeerGUID = Peer.queryPeerGUID(dbConnection, hostAddress);
+		} catch (SQLException ex) 
+		 {
+		 	throw new RuntimeException("Error completing the database operation: " + ex.getMessage() + " \n " + ex.getSQLState());
+		 }
+		
+		if (sharingPeerGUID < 0)
+		{
+			return outcome;
+		}
+					
+		try 
+		{
+			outcome = FileShared.checkFileShared(dbConnection, sharingPeerGUID, fileName);
+		} catch (SQLException e) 
+		 {
+			throw new RuntimeException("Error completing the database operation: " + e.getMessage() + " \n " + e.getSQLState());
+		 }
+		
+		return outcome;
+						
+	}
+	
+	/**
+	 * Get the host name or IP address of a host which is sharing the specified file.
+	 * @param fileName String of the file name to check.
+	 * @return The hostname or IP address of the host sharing the specified file,
+	 * or an empty string if no host is sharing the file.
+	 * @throws FileNotSharedException if there is no peer which is sharing the specified
+	 * file.
+	 * @throws RuntimeException if the database operation fails
+	 */
+	public String getPeerHost(String fileName)
+	{
+		try
+		{
+			Peer result = FileShared.getFilePeer(dbConnection, fileName);
+			if (result == null)
+			{
+				throw new FileNotSharedException("The file " + fileName + " is not shared by any host.");
+			}
+			
+			return result.getHostAddress();
+			
+		} catch (SQLException ex)
+		{
+			throw new RuntimeException ("Exception occurred while reading from database"); 
+		}
+	}
+	
+	
+	/**Registers a file that is being shared by the specified peer. Creates
+	 * a new Peer object to represent the connecting peer and commits its data 
+	 * to the DB, if needed.
+	 * 
+	 * Instances of the various SharingData data class instances will share
+	 * the same database connection, this.dbConnection.
+	 * 
+	 * @param fileName String of the name of the file to be shared.
+	 * @param peerAddress String holding IP address of the peer.
+	 * @return boolean true if file is successfully shared, or false if file is already shared.
+	 */
+	public boolean registerFile(String fileName, String peerAddress)
+	{
+		Peer currentPeer = null;
+		try
+		{
+			/*Create new peer record, if needed. Acquire reference to the corresponding Peer object.
+			Note this is done regardless of the whether or not the peer already exists in the DB,
+			but the DB record will not be updated if the peer already exists.*/
+			currentPeer = new Peer(dbConnection, peerAddress);
+			
+			/*Check if the Peer is already sharing a file with the given name. If so, throw FileAlreadySharedException */
+			if (FileShared.checkFileShared(dbConnection, currentPeer.getGUID(), fileName))
+			{
+				throw new FileAlreadySharedException("The file " + fileName + " is already shared by the host " + peerAddress);
+			}
+							
+			/*Create new file record and get a reference to the corresponding PeerFile object.*/
+			PeerFile currentFile = new PeerFile(dbConnection, fileName);
+			
+			/*Create a new FileShared record for the relationship between the Peer and the PeerFile, and commit it to database. */
+			new FileShared(dbConnection, currentPeer, currentFile, true);
+		}
+		catch (SQLException ex)
+		{
+			throw new RuntimeException ("Exception occurred while writing to database \n" + ex.getMessage() + "\n"); 
+		}
+		return true;
+	}
+	
+	
+	/**Deregister the file so that the file specified is no longer being
+	 * shared by the current peer. Creates a new Peer instance to represent
+	 * the peer requesting the operation, if needed.	 
+	 * 
+	 * @param fileName String name of the file to stop sharing.
+	 * @return boolean true if success
+	 * @throws FileNotSharedException if the file cannot be deleted because it
+	 * is not shared by the specified host.
+	 * @throws RuntimeException if the database operation fails
+	 */
+	public boolean deregisterFile(String fileName, String peerAddress)
+	{
+		Peer currentPeer = null;
+		try
+		{
+			/* If a peer with the given address exists, instantiate currentPeer. Note  
+			 * that this will not query database again, as the Peer instance is created
+			 * from the address and GUID which are already in memory. 
+			 *
+			 */
+			int peerGUID = Peer.queryPeerGUID(dbConnection, peerAddress);             //Check if peer exists and get GUID if so.
+			
+			/*Throw a FileNotSharedException if the Peer does not exist, indicated by the return
+			 * peerGUID being < 0.
+			 */
+			if (peerGUID < 0)
+			{
+				throw new FileNotSharedException("The file " + fileName + " could not be deleted because "
+						+ " the peer " + peerAddress + " is not registered for sharing.");
+			}
+			
+			currentPeer = new Peer(dbConnection, peerAddress, peerGUID);              //Create Peer without querying database.
+			
+			if (!(FileShared.deleteAssociation(dbConnection, currentPeer, fileName)))
+			{
+				throw new FileNotSharedException("The file " + fileName + " could not be deleted because "
+						+ "it is not shared by the peer " + peerAddress + ".");
+			}
+		}
+		catch (SQLException ex)
+		{
+			throw new RuntimeException ("Exception occurred while reading from database. Exception: " + 
+					"\n" + ex.getMessage() + "\n" + ex.getSQLState()); 
+		}
+		
+		return true;
+	}
+
+}
+
+ 

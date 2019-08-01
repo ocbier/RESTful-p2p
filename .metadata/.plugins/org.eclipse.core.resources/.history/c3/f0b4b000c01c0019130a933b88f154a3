@@ -1,0 +1,252 @@
+/**
+ * P2PPeerController.java
+ * 
+ * P2PPeerController supports listening for connections and downloading files from other peers.
+ * Also provides supporting operations, such as checking if a file is available from any peer.
+ * Note that listening, sending, and receiving are handled on separate threads to maintain 
+ * responsiveness in the main thread. 
+ * 
+ * Note that most operations in P2PPeerController rely on an index service. 
+ * Specifically, the FileShareIndex REST service options are invoked on the application server 
+ * for registering a shared file, unregistering a file, or requesting an address for a peer 
+ * which is sharing a given file. Methods are invoked on a remote instance of 
+ * p2pindexservice.IndexService which must be availble on the server.
+ * 
+ * @author Oloff Biermann
+ */
+package org.biermann.tme3.p2pclient;
+
+import java.io.IOException;
+import java.net.*;
+import java.net.UnknownHostException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+import javax.ws.rs.client.*;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+
+import org.biermann.tme3.p2pclient.messages.FileMessage;
+
+
+public class P2PPeerController 
+{
+	private ExecutorService threadPool;
+	private String shareDir;
+	private String receiveDir;
+	private int listenPort;
+	private WebTarget indexServiceTarget;
+	private Client indexServiceClient;
+	
+	/*"Shortcut" constants for the HTTP status codes that will be used by P2PPeerController */
+	public static final int HTTP_CREATED = Response.Status.CREATED.getStatusCode();
+	public static final int HTTP_NO_CONTENT = Response.Status.NO_CONTENT.getStatusCode();
+	public static final int HTTP_OK = Response.Status.OK.getStatusCode();
+		
+			
+	/**
+	 * Creates a P2PPeerController which will used the specified directories for finding
+	 * files to share and for storing received files. Also the specified port
+	 * will be used when listening for peer connections. Finally, the indexService
+	 * instance will be used when looking up peers sharing a particular file.
+	 * 
+	 * @param shareDir String with path to directory where shared files are stored
+	 * @param receiveDir String with path to directory where received files will be downloaded
+	 * @param serverPort int Port that will be used to listen for peer connections
+	 * @param indexServiceUri String with the base URI for the index service
+	 */
+	public P2PPeerController(String shareDir, String receiveDir, int serverPort, String indexServiceUri)
+	{
+		this.shareDir = shareDir;
+		this.receiveDir = receiveDir;
+		listenPort = serverPort;
+				
+		indexServiceClient = ClientBuilder.newClient();                             //Create the client for accessing index service.
+		this.indexServiceTarget = indexServiceClient.target(indexServiceUri);       //Create the WebTarget representing the sharing index resource
+		threadPool = Executors.newCachedThreadPool();                               //Create thread pool for download and receive threads.
+	}
+	
+	
+	/**Utilizes a separate thread to listen for new connections
+	 * from peers wishing to request a shared file.
+	 * @throws IOException If creation of the helper thread fails.
+	 */
+	public void listenForPeers() throws IOException
+	{
+		 /*Submit a new thread which will listen for peer and handle requests
+		   for shared files */
+		threadPool.submit(new FileSendHelper(shareDir, listenPort));    
+	}
+	
+	
+	/**
+	 * Registers a file for sharing with the IndexService.
+	 * @param path Path with path of file to share.
+	 * @param hostAddress String with the host address of the host which will share the file.
+	 * @return boolean true if sharing succeeds, false if file is already shared.
+	 */
+	public boolean shareFile(Path path, String hostAddress)
+	{
+		String fileName = path.getFileName().toString().trim();
+		FileMessage postMessage = new FileMessage(fileName, hostAddress);               //Payload for POST message with file name and sharing host IP address.
+		
+		/*Send the POST request with the FileMessage as the entity converted to XML*/
+		Response outcome = this.indexServiceTarget.request()
+				.post(Entity.entity(postMessage, MediaType.APPLICATION_XML));    
+		
+		/*Return true if we get a 201 Created response or a 200 OK response*/
+		if(outcome.getStatus() == HTTP_CREATED || outcome.getStatus() == HTTP_OK)
+		{
+			return true;
+			System.out.println("here");
+		}
+						
+		return false;                                                                    //If any other status code is received, return false
+	}
+	
+	
+	/**
+	 * Registers a file for sharing with the IndexService, using the address of the local host
+	 * as the sharing peer.
+	 * @param path String with the host address of the host which will share the file
+	 * @return boolean true if sharing succeeds, false if file is already shared.
+	 */
+	public boolean shareFile(Path path) throws UnknownHostException
+	{
+		return shareFile(path, InetAddress.getLocalHost().getHostAddress());
+	}
+	
+	
+	/**Deregisters a shared file from the IndexService.
+	 * 
+	 * @param fileName String name of the file to share.
+	 * @param String containing the host address of the host which will stop sharing the file
+	 * @return boolean true if deregistration(unsharing) succeeds, false otherwise.
+	 */
+	public boolean unshareFile(String fileName, String hostAddress)
+	{
+		WebTarget unshareTarget = this.indexServiceTarget.path("filename="+fileName)
+				.path("peeraddress="+hostAddress);
+		
+		Response response = unshareTarget.request(MediaType.APPLICATION_XML).delete();          //Make DELETE request to resource, get the Response.
+		
+		/*Check for a "204 No Content" response and return true if this is the case*/
+		if (response.getStatus() == HTTP_NO_CONTENT)
+		{
+			return true;
+		}
+		
+		return false;                                                                           //Return false if status code was not 204.
+	}
+	
+	
+	/**Deregisters a shared file from the IndexService. Uses the address of the local host
+	 * as the sharing peer.
+	 * 
+	 * @param fileName String name of the file to share.
+	 * @return boolean true if registration succeeds, false otherwise.
+	 */
+	public boolean unshareFile(String fileName) throws UnknownHostException
+	{
+		return unshareFile(fileName, InetAddress.getLocalHost().getHostAddress());
+	}
+	
+	
+	/**
+	 * Attempts to download a file from a peer. Uses the index server to get a peer which is
+	 * sharing the file. If the file is available, establish a connection with the other
+	 * peer and download the file.
+	 * 
+	 * Note that this method will not block while the data is transfered as a FileReceiveHelper
+	 * is used on a separate thread to handle this operation.
+	 * @param downloadStatus DownloadStatus object containing the file name of the file to download.
+	 * @return true if download begins successfully, or false if file could not be found.
+	 */
+	public boolean downloadFile(DownloadStatus downloadStatus) throws IOException
+	{
+		String availablePeer = getFilePeer(downloadStatus.getFileName()).trim();
+		
+		/*getFilePeer() returns null if no host is sharing the file */
+		if (availablePeer == null)
+			return false;
+		
+		/*Pass the address of the peer holding file, the remote port, the
+		 * receive directory on this peer to the FileReceiveHelper object and submit it
+		 * to run in a separate thread to download the file and save it to disk
+		 * in the receive directory. Also pass the DownloadStatus object containing the fileName
+		 * which will allow threads to await and be signaled when the download completes.
+		 */
+		threadPool.submit(new FileReceiveHelper(availablePeer, listenPort, receiveDir, downloadStatus));
+		
+		return true;
+	}
+	
+	
+	/**
+	 * Checks the specified path to determine if the file exists 
+	 * in the sharing directory.
+	 * @param filePath Path holding the path to the file
+	 * @return 
+	 * @return boolean true if specified file exists, false otherwise
+	 */
+	public boolean checkLocalFileExists(String fileName)
+	{	
+		Path filePath = Paths.get(shareDir, fileName).toAbsolutePath();
+		return filePath.toFile().exists();        //Check if the if the file exists.
+		
+	}
+	
+
+	
+	/**Uses the IndexService instance to obtain the host address
+	 * of any peer which is sharing a file with the given name.
+	 * Returns null if no peer was found.
+	 * @param fileName String holding the filename to check.
+	 * @return String with host address of sharing peer, or null if no peer found.
+	 */
+	public String getFilePeer(String fileName)
+	{
+		WebTarget filePeerTarget = indexServiceTarget.path(fileName);                                //Create specific target based on the index service target.
+		Invocation.Builder invocationBuilder = filePeerTarget.request(MediaType.APPLICATION_XML);     //Create Invocation Builder to request XML from the target.
+		
+		Response response = invocationBuilder.get();                                                  //Make GET request to resource.
+				
+		/*Not a success response, so return null */
+		if (response.getStatus() != HTTP_OK)    
+		{
+			return null;
+		}
+		
+		/*Otherwise get the FileMessage object created from XML response message
+		 * and return the host address contained in that FileMessage instance.
+		 */
+		FileMessage responseMessage = response.readEntity(FileMessage.class);
+		
+		return responseMessage.getHostAddress();
+	}
+	
+	
+	/**
+	 * Get the directory that holds files that will be shared.
+	 * @return String with relative path to the sharing directory
+	 */
+	public String getSharingDir()
+	{
+		return shareDir;
+	}
+	
+	/**
+	 * Get the directory which will hold received files.
+	 * @return String with relative path to the receive directory.
+	 */
+	public String getReceiveDir()
+	{
+		return receiveDir;
+	}
+	
+	
+		
+}
+
