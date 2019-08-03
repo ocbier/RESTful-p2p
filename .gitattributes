@@ -1,2 +1,3 @@
 /.metadata/* linguist-vendored
 *.java linguist-language=Java
+*.sql linguist-language=SQL
