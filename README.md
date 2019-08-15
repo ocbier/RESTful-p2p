@@ -64,29 +64,29 @@ This may be done by deploying p2pindex service to a separate WildFly server or c
 
 **Option 1: Deploying P2PIndex to a standalone WildFly server:**
 The steps may vary, depending on the version used. See the WildFly documentation for more information, if required. The general steps for deploying P2PIndex to WildFly 12.0 are as follows:
-i.	Ensure that the WildFly server is started. 
-ii.	Open the WildFly Admin Console in a browser by navigating to http://localhost:8080/  and then clicking on “Administration Console”
-iii.	Select the “Deployments” tab
-iv.	In the “New Deployment” wizard, select “Upload a new deployment” and click “next”
-v.	Browse to find the “p2pindex.war” file for P2PIndex; this should be located under the main TME3 directory
-vi.	In the following screen, leave all options as-is, unless a different name for the deployment is desired, and then click finish.
-vii.	The p2pindex service is now deployed.
+- i. Ensure that the WildFly server is started. 
+- ii. Open the WildFly Admin Console in a browser by navigating to http://localhost:8080/  and then clicking on “Administration Console”
+- iii. Select the “Deployments” tab
+- iv. In the “New Deployment” wizard, select “Upload a new deployment” and click “next”
+- v. Browse to find the “p2pindex.war” file for P2PIndex; this should be located under the main TME3 directory
+- vi. In the following screen, leave all options as-is, unless a different name for the deployment is desired, and then click finish.
+- vii. The p2pindex service is now deployed.
 
 **Option 2: The steps for testing by deploying the P2PIndex to WildFly via Eclipse are as follows:**
-i.	Ensure that the p2pindex project is imported to Eclipse 
-ii.	Skip this step if WildFly has already been added to Eclipse
-a.	Under the “Servers” tab, right click and select New->Server
-b.	Under “JBoss Community”, select “WildFly 12”
-c.	Enter an appropriate host name (“Server’s host name”) for the server and an identifier to use in Eclipse (“Server name”)
-d.	Click “next” and leave all options set to default in the next screen
-e.	“Click “next” and select the “p2pindex” resource and at it to the configured resources for the server
+- i. Ensure that the p2pindex project is imported to Eclipse 
+- ii. Skip this step if WildFly has already been added to Eclipse
+   - a. Under the “Servers” tab, right click and select New->Server
+   - b. Under “JBoss Community”, select “WildFly 12”
+   - c. Enter an appropriate host name (“Server’s host name”) for the server and an identifier to use in Eclipse (“Server name”)
+   - d. Click “next” and leave all options set to default in the next screen
+   - e. “Click “next” and select the “p2pindex” resource and at it to the configured resources for the server
 
-iii.	If WildFly has already been added to Eclipse (step 1 was skipped) do the following, else skip to step 3:
-a.	Under the “Servers” stab, right click on the WildFly server and select “Add and Remove”
-b.	Under “Available”, select the p2pindex resource and add it to the configured resources for the server
-c.	Click “Finish”
+- iii. If WildFly has already been added to Eclipse (step 1 was skipped) do the following, else skip to step 3:
+    - a. Under the “Servers” stab, right click on the WildFly server and select “Add and Remove”
+    - b. Under “Available”, select the p2pindex resource and add it to the configured resources for the server
+    - c. Click “Finish”
 
-iv.	In the “Servers” tab, right click on the “WildFly” server and select “Start”
+- iv. In the “Servers” tab, right click on the “WildFly” server and select “Start”
 
 **3. Ensure files to be shared are in “../files/sharing” directory on each peer**
 This path is relative to the parent directory of the directory containing the P2PPeer.jar file. The parent directory is currently the “TME3/p2ppeer/jar” directory. Therefore, the “files” directory should be in the same directory as the “jar” directory.
@@ -94,9 +94,9 @@ This path is relative to the parent directory of the directory containing the P2
 **4. Start one or more instances of org.biermann.tme3.p2pclient.P2PPeer**
 As mentioned in the previous section, P2PPeer can be started from the P2PPeer.jar located in p2pclient/jar/P2PPeer.jar.
 (Optional) Pass the URL of the index service shared files resource as a parameter on the command line when starting P2PPeer.jar.
--	If no parameter is given, the default is http://localhost:8080/p2pindex/webapi/sharedfiles
--	If the endpoint providing the index service is a remote host and/or the service port is modified, the URL must be explicitly provided
-o	E.g. If the remote host providing the service is 192.168.1.7, the P2PPeer.jar should be executed as follows:
-P2PPeer.jar http://192.168.1.7:8080/p2pindex/webapi/sharedfiles 
+- If no parameter is given, the default is http://localhost:8080/p2pindex/webapi/sharedfiles
+- If the endpoint providing the index service is a remote host and/or the service port is modified, the URL must be explicitly provided
+  E.g. If the remote host providing the service is 192.168.1.7, the P2PPeer.jar should be executed as follows:
+   P2PPeer.jar http://192.168.1.7:8080/p2pindex/webapi/sharedfiles 
 
 Alternatively, the P2PPeer client can be started using the P2PPeer.class Java class file found in “p2pclient/target/classes/org/Biermann/tme3/p2pclient”. The optional parameter for the index service URL may also be used here.  
