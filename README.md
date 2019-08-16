@@ -1,6 +1,6 @@
 # RESTful-p2p
 
-P2P file sharing system with RESTful API built with JAX-RS. 
+P2P file sharing system with RESTful API using JAX-RS. 
 
 Provides a basic GUI on the client side to support interaction with the central directory and with other peers.
 
@@ -14,9 +14,9 @@ The WildFly 12.0 Application Server was used to host the file index service.
 MariaDB 10.3 was used to control persistent peer file sharing data.
 
 
-Please see the UML class diagram (“Specification.pdf”) for an overview of the system. The system consists of the following components:
+Please see the UML class diagram (“Specification.pdf”) for an overview of the system architecture. The system consists of the following main components:
 
-•	**org.biermann.tme3.p2pclient.P2PPeer.java** (source code found in p2ppeer\src\p2pclient; execute via “p2ppeer/jar/P2PPeer.jar”): Reused from TME 2, with modifications. Represents a peer within the peer to peer sharing system. Peers can act both as clients and servers since they can request and receive files while also transmitting files to other peers in response to requests. 
+•	**org.biermann.tme3.p2pclient.P2PPeer.java** (source code found in p2ppeer\src\p2pclient; See execution instructions under "2. Application Execution" below): Reused from TME 2, with modifications. Represents a peer within the peer to peer sharing system. Peers can act both as clients and servers since they can request and receive files while also transmitting files to other peers in response to requests. 
 
 The client utilizes an instance of org.biermann.tme3.p2pclient.P2PPeerController which is responsible for managing interaction with the index service (see IndexServer.java below). Specifically, the desired resources are requested using the p2pindex REST API. Each request uses the appropriate HTTP method for the operation type. This allows the peer to register a shared file (POST), unregistering a file (DELETE), or requesting an address for a peer which is sharing a given file (GET). 
 
@@ -29,10 +29,10 @@ User interaction with the P2PPeerController is mediated by a simple GUI interfac
 All communication between the client and the service uses XML. Standard communication between the index service and clients uses org.biermann.tme3.p2pindex.messages.FileMessages to transmit file name and peer address data, where required. FileMessage instances are serialized as XML before transmission and then deserialized by the receiver.
 
 Custom exception handling is used to avoid returning the default WildFly HTML error documents. Instead, custom exceptions, javax.ws.rs.WebApplicationExceptions, and java.lang.RuntimeExceptions are mapped to custom responses in different implementations of javax.ws.rs.ext.ExceptionMapper<T>. This ensures that XML serializations of org.biermann.tme3.messages.ErrorMessage instances are returned to the client in the HTTP response body. These instances contain a descriptive error message and the associated HTTP status code.
+	
+•	**org.biermann.tme3.p2pindex.data** The JDBC data classes which encapsulate interaction with the database driver are found in this subpackage. These classes correspond to the the tables in the database and cache attributes which are retrieved when they are instantiated. Data is cached in memory for duration of the object lifetime. These classes also offer convenient methods to perform various queries. All classes are derived from SharingData in SharingData.java. This abstract super class contains a “java.sql.Connection” instance and two abstract methods which are inherited by its subclasses. The implementation of all subclasses allows this Connection object to be shared. This is not required or enforced, although it is often done here to improve performance and avoid creating more database connections than required.
 
 •	**sharing_index database:** A simple MariaDB database containing records of shared files. Each peer may share 0 or more files. A relationship is established each time a peer wishes to share a file. That relationship and the file record are removed if the peer wishes to stop sharing the file. If a file must be downloaded, the appropriate peer is found by searching for a matching relationship. 
-
-Note that the JDBC data classes which encapsulate interaction with the database driver are found in the org.biermann.tme3.p2pindex.data subpackage. These classes correspond to the the tables in the database and cache attributes which are retrieved when they are instantiated. Data is cached in memory for duration of the object lifetime. These classes also offer convenient methods to perform various queries. All classes are derived from SharingData in SharingData.java. This abstract super class contains a “java.sql.Connection” instance and two abstract methods which are inherited by its subclasses. The implementation of all subclasses allows this Connection object to be shared. This is not required or enforced, although it is often done here to improve performance and avoid creating more database connections than required.
 
 The MariaDB JDBC driver is packaged with the p2pindex.war and is also included as a Maven dependency in the Eclipse project. Therefore, it should is not necessary to manually download the driver or add it to the classpath.  For reference, the driver can be found on the MariaDB site HERE.
 
