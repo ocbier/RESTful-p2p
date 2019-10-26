@@ -14,7 +14,7 @@ The WildFly 12.0 Application Server was used to host the file index service.
 MariaDB 10.3 was used to control persistent peer file sharing data.
 
 
-Please see the UML class diagram (“Specification.pdf”) for an overview of the system architecture. The system consists of the following main components:
+Please see the UML class diagram in [specification.pdf](https://github.com/OCBier/RESTful-p2p/blob/master/Specification.pdf) for an overview of the system architecture. The system consists of the following main components:
 
 •	**org.biermann.tme3.p2pclient.P2PPeer.java** (source code found in p2ppeer\src\p2pclient; See execution instructions under "2. Application Execution" below): Reused from TME 2, with modifications. Represents a peer within the peer to peer sharing system. Peers can act both as clients and servers since they can request and receive files while also transmitting files to other peers in response to requests. 
 
