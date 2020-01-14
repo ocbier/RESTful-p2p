@@ -12,6 +12,7 @@ Provides a basic GUI on the client side to support interaction with the central 
 Programs were developed using Java SDK 1.8.0_191 and testing was performed using JRE 1.8.0_191. The IDE used was Eclipse EE IDE for Web Developers Oxygen release (4.7.3a).
 The WildFly 12.0 Application Server was used to host the file index service.
 MariaDB 10.3 was used to control persistent peer file sharing data.
+The GUI was built using the Swing GUI toolkit.
 
 
 Please see the UML class diagram in [specification.pdf](https://github.com/OCBier/RESTful-p2p/blob/master/Specification.pdf) for an overview of the system architecture. The system consists of the following main components:
