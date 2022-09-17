@@ -17,7 +17,7 @@ The GUI was built using the Swing GUI toolkit.
 
 Please see the UML class diagram in [specification.pdf](https://github.com/OCBier/RESTful-p2p/blob/master/Specification.pdf) for an overview of the system architecture. The system consists of the following main components:
 
-•	**org.biermann.tme3.p2pclient.P2PPeer.java** (source code found in p2ppeer\src\p2pclient; See execution instructions under "2. Application Execution" below): Reused from TME 2, with modifications. Represents a peer within the peer to peer sharing system. Peers can act both as clients and servers since they can request and receive files while also transmitting files to other peers in response to requests. 
+•	**org.biermann.tme3.p2pclient.P2PPeer.java** (source code found in p2ppeer\src\p2pclient; See execution instructions under "2. Application Execution" below):  Represents a peer within the peer to peer sharing system. Peers can act both as clients and servers since they can request and receive files while also transmitting files to other peers in response to requests. 
 
 The client utilizes an instance of org.biermann.tme3.p2pclient.P2PPeerController which is responsible for managing interaction with the index service (see IndexServer.java below). Specifically, the desired resources are requested using the p2pindex REST API. Each request uses the appropriate HTTP method for the operation type. This allows the peer to register a shared file (POST), unregistering a file (DELETE), or requesting an address for a peer which is sharing a given file (GET). 
 
